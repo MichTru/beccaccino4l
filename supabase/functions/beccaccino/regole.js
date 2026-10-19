@@ -67,6 +67,7 @@ export function applyPlay(g, s, c, sig) {
   if (h.trick.length === 4) h.trick = [];
   const lead = h.trick.length === 0;
   h.trick.push({ s, c, sig: lead && sig ? sig : null });
+  if (lead && sig) h.sigs = (h.sigs || []).concat([{ s, suit: cs(c), sig }]);
   h.played.push({ s, c });
   if (h.trick.length < 4) { h.turn = (s + 1) % 4; return; }
   const w = trickWinner(h.trick, h.trump), t = teamOf(w.s);
@@ -87,27 +88,91 @@ export function applyPlay(g, s, c, sig) {
 }
 
 // ---- CPU ----
+// Le CPU contano le carte uscite, sanno chi è rimasto senza un seme,
+// danno i segnali quando aprono e seguono quelli del compagno.
 export function botTrump(seed, s) {
   const hc = deal(seed)[s]; let best = "D", bv = -1;
-  for (const su of SUITS) { const x = hc.filter((c) => cs(c) === su); const v = x.length * 10 + x.reduce((a, c) => a + STR[cr(c)], 0); if (v > bv) { bv = v; best = su; } }
+  for (const su of SUITS) {
+    const x = hc.filter((c) => cs(c) === su);
+    const cricca = ["1", "2", "3"].every((r) => hc.includes(su + r)) ? 40 : 0;
+    const v = x.length * 10 + x.reduce((a, c) => a + STR[cr(c)], 0) + cricca;
+    if (v > bv) { bv = v; best = su; }
+  }
   return best;
 }
+
+// quello che una CPU "sa": carte uscite, carte che non vede, semi finiti dagli altri
+function vista(g, seed, s) {
+  const h = g.hand;
+  const mine = handOf(g, seed, s);
+  const played = new Set(h.played.map((p) => p.c));
+  const unseen = [];
+  for (const su of SUITS) for (let r = 1; r <= 10; r++) { const c = su + r; if (!played.has(c) && !mine.includes(c)) unseen.push(c); }
+  const void_ = [0, 1, 2, 3].map(() => new Set());
+  for (let i = 0; i + 1 < h.played.length || i < h.played.length; i += 4) {
+    const grp = h.played.slice(i, i + 4);
+    if (!grp.length) break;
+    const led = cs(grp[0].c);
+    for (const p of grp.slice(1)) if (cs(p.c) !== led) void_[p.s].add(led);
+  }
+  return { mine, unseen, void_, partner: (s + 2) % 4 };
+}
+// una carta è "padrona" se nessuna carta non ancora vista dello stesso seme la batte
+const padrona = (c, unseen) => !unseen.some((u) => cs(u) === cs(c) && STR[cr(u)] > STR[cr(c)]);
+const asc = (a, b) => STR[cr(a)] - STR[cr(b)];
+
 export function botPlay(g, seed, s) {
   const h = g.hand, L = legal(g, seed, s), tr = liveTrick(h), trump = h.trump;
-  const asc = (a, b) => STR[cr(a)] - STR[cr(b)];
+  const V = vista(g, seed, s);
+  const opp = [(s + 1) % 4, (s + 3) % 4];
   const cheap = (arr) => arr.slice().sort((a, b) => (cs(a) === trump) - (cs(b) === trump) || TH(a) - TH(b) || asc(a, b))[0];
+  const mateSigs = (h.sigs || []).filter((x) => x.s === V.partner);
+
   if (!tr.length) {
-    const non = L.filter((c) => cs(c) !== trump), pool = non.length ? non : L;
+    const non = L.filter((c) => cs(c) !== trump);
+    // il compagno ha bussato o strisciato su un seme: glielo ritorno
+    for (const x of mateSigs.slice().reverse()) {
+      if (x.sig === "volo") continue;
+      const m = non.filter((c) => cs(c) === x.suit);
+      if (m.length) return m.find((c) => padrona(c, V.unseen)) || m.slice().sort(asc)[0];
+    }
+    // carte padrone fuori briscola, dove nessun avversario può tagliare
+    const sicure = non.filter((c) => padrona(c, V.unseen) && !opp.some((o) => V.void_[o].has(cs(c))));
+    if (sicure.length) return sicure.sort((a, b) => TH(b) - TH(a) || asc(b, a))[0];
+    // il compagno ha finito un seme (volo): gli do quel seme da tagliare
+    for (const x of mateSigs) {
+      if (x.sig !== "volo") continue;
+      const m = non.filter((c) => cs(c) === x.suit);
+      if (m.length) return cheap(m);
+    }
+    const pool = non.length ? non : L;
     const tre = pool.find((c) => cr(c) === 3); if (tre) return tre;
     return cheap(pool);
   }
+
   const w = trickWinner(tr, trump), mate = teamOf(w.s) === teamOf(s), last = tr.length === 3;
   const pts = tr.reduce((x, e) => x + TH(e.c), 0);
+  const win = L.filter((c) => beats(c, w.c, trump)).sort((a, b) => (cs(a) === trump) - (cs(b) === trump) || asc(a, b));
+  // il compagno ha bussato in questa presa: prendo e poi gli ritorno il seme
+  if (tr[0].s === V.partner && tr[0].sig === "busso" && !mate && win.length) return win[0];
   if (mate && (last || STR[cr(w.c)] >= 9 || cs(w.c) === trump)) {
+    // il compagno prende: carico i punti senza sprecare briscole
     const rich = L.filter((c) => cs(c) !== trump || L.every((x) => cs(x) === trump)).sort((a, b) => TH(b) - TH(a) || asc(a, b));
     return rich[0] || cheap(L);
   }
-  const win = L.filter((c) => beats(c, w.c, trump)).sort((a, b) => (cs(a) === trump) - (cs(b) === trump) || asc(a, b));
   if (!mate && win.length && (pts >= 1 || last || cs(win[0]) !== trump)) return win[0];
   return cheap(L);
+}
+
+// segnale che dà una CPU quando apre una presa
+export function botSignal(g, seed, s, c) {
+  const h = g.hand;
+  if (h.trick.length !== 0 && h.trick.length !== 4) return null;
+  if (cs(c) === h.trump) return null;
+  const V = vista(g, seed, s);
+  const resto = V.mine.filter((x) => x !== c && cs(x) === cs(c));
+  if (!resto.length) return V.mine.length > 1 ? "volo" : null;
+  if (!padrona(c, V.unseen) && resto.some((x) => padrona(x, V.unseen))) return "busso";
+  if (resto.length >= 3) return "striscio";
+  return null;
 }

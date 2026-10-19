@@ -45,3 +45,22 @@ alter publication supabase_realtime add table public.tavoli;
 -- codice breve per entrare al tavolo (liberato quando il tavolo si chiude)
 alter table public.tavoli add column codice text;
 create unique index tavoli_codice_key on public.tavoli (codice) where codice is not null;
+
+-- profili dei giocatori: un codice personale per ritrovarsi da un altro telefono
+create table public.giocatori (
+  id text primary key,
+  codice text not null unique,
+  nick text not null default '',
+  avatar smallint check (avatar between 0 and 11),
+  created_at timestamptz not null default now(),
+  seen_at timestamptz not null default now()
+);
+-- una chiave per ogni telefono che usa quel profilo
+create table public.chiavi (
+  hash text primary key,
+  giocatore text not null references public.giocatori(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index chiavi_giocatore_idx on public.chiavi (giocatore);
+alter table public.giocatori enable row level security;
+alter table public.chiavi enable row level security;
