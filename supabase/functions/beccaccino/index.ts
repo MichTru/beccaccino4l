@@ -1,11 +1,17 @@
 // Funzione "beccaccino": unico punto in cui lo stato del tavolo cambia.
 // Il mazzo (seed) e le chiavi dei giocatori stanno in public.segreti e non escono mai.
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+// Nessuna libreria: chiamate dirette a PostgREST, così la funzione parte più in fretta.
 import * as R from "./regole.js";
 
-const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
-  auth: { persistSession: false },
-});
+const SB_URL = Deno.env.get("SUPABASE_URL")!;
+const SB_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SB_H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json" };
+async function rest(path: string, init: RequestInit = {}) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { ...init, headers: { ...SB_H, ...(init.headers || {}) } });
+  const t = await r.text();
+  if (!r.ok) throw new Error(`db ${r.status}: ${t.slice(0, 200)}`);
+  return t ? JSON.parse(t) : null;
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,16 +33,17 @@ const cleanNick = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().sl
 
 type Load = { g: any; ver: number; seed: number | null; posti: (string | null)[]; host: string };
 async function load(id: string): Promise<Load> {
-  const [{ data: t }, { data: s }] = await Promise.all([
-    sb.from("tavoli").select("stato, versione").eq("id", id).maybeSingle(),
-    sb.from("segreti").select("seed, posti, host").eq("tavolo_id", id).maybeSingle(),
+  const q = encodeURIComponent(id);
+  const [ts, ss] = await Promise.all([
+    rest(`tavoli?id=eq.${q}&select=stato,versione`),
+    rest(`segreti?tavolo_id=eq.${q}&select=seed,posti,host`),
   ]);
+  const t = ts && ts[0], s = ss && ss[0];
   if (!t || !s) fail("Tavolo non trovato");
   return { g: t!.stato, ver: t!.versione, seed: s!.seed, posti: s!.posti, host: s!.host };
 }
 async function save(id: string, L: Load, seed: number | null, posti: (string | null)[] | null) {
-  const { data, error } = await sb.rpc("salva_tavolo", { p_id: id, p_ver: L.ver, p_stato: L.g, p_seed: seed, p_posti: posti });
-  if (error) fail("Salvataggio non riuscito");
+  const data = await rest("rpc/salva_tavolo", { method: "POST", body: JSON.stringify({ p_id: id, p_ver: L.ver, p_stato: L.g, p_seed: seed, p_posti: posti }) });
   return data === true;
 }
 
@@ -45,7 +52,12 @@ async function mossa(id: string, fn: (L: Load) => { seed?: number; posti?: (stri
   for (let i = 0; i < 4; i++) {
     const L = await load(id);
     const out = fn(L) || {};
-    if (await save(id, L, out.seed ?? null, out.posti ?? null)) return L;
+    if (await save(id, L, out.seed ?? null, out.posti ?? null)) {
+      if (out.posti) L.posti = out.posti;
+      if (out.seed != null) L.seed = out.seed;
+      L.ver += 1;
+      return L;
+    }
   }
   fail("Il tavolo è molto trafficato, riprova");
 }
@@ -57,7 +69,7 @@ async function giocaCpu(id: string) {
     try { L = await load(id); } catch { return; }
     const a = R.actor(L.g);
     if (a < 0 || !L.g.seats[a]?.bot) return;
-    await sleep(L.g.hand.trick.length === 4 ? 1300 : 800);
+    await sleep(L.g.hand.trick.length === 4 ? 950 : 550);
     const ok = await save(id, (() => {
       if (L.g.status === "trump") R.chooseTrump(L.g, L.seed, R.botTrump(L.seed, a));
       else R.applyPlay(L.g, a, R.botPlay(L.g, L.seed, a), null);
@@ -89,24 +101,28 @@ Deno.serve(async (req) => {
       const nick = cleanNick(body.nick) || fail("Scrivi il tuo nome");
       const id = "t" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
       const stato = { hostNick: nick, seats: [{ nick, bot: false }, null, null, null], status: "lobby", scores: [0, 0], history: [], hand: null, log: [], winner: null };
-      const { error } = await sb.from("tavoli").insert({ id, nome: "Tavolo di " + nick, stato });
-      if (error) fail("Non riesco a creare il tavolo");
-      await sb.from("segreti").insert({ tavolo_id: id, host: me, posti: [me, null, null, null] });
+      try {
+        await rest("tavoli", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id, nome: "Tavolo di " + nick, stato }) });
+        await rest("segreti", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tavolo_id: id, host: me, posti: [me, null, null, null] }) });
+      } catch (_) { fail("Non riesco a creare il tavolo"); }
       return json({ id });
     }
 
     if (typeof tavolo !== "string" || !/^t[a-z0-9]{4,20}$/.test(tavolo)) fail("Tavolo non valido");
 
-    if (azione === "info") {
-      const L = await load(tavolo);
+    const ioOf = (L: Load) => {
       const s = seatOf(L);
       const mano = s >= 0 && L.g.hand && L.seed != null ? R.handOf(L.g, L.seed, s) : [];
-      const legali = s >= 0 && L.g.status === "play" && L.g.hand.turn === s ? R.legal(L.g, L.seed, s) : [];
-      return json({ seat: s, host: L.host === me, mano, legali, versione: L.ver });
+      const legali = s >= 0 && L.g.status === "play" && L.g.hand.turn === s && L.seed != null ? R.legal(L.g, L.seed, s) : [];
+      return { seat: s, host: L.host === me, mano, legali, n: L.g.hand ? L.g.hand.n : 0 };
+    };
+    if (azione === "info") {
+      const L = await load(tavolo);
+      return json({ ...ioOf(L), stato: L.g, versione: L.ver });
     }
 
     let cpu = false;
-    await mossa(tavolo, (L) => {
+    const done = await mossa(tavolo, (L) => {
       const g = L.g, s = seatOf(L), host = L.host === me;
       const posti = L.posti.slice();
       switch (azione) {
@@ -168,7 +184,7 @@ Deno.serve(async (req) => {
       }
     });
     if (cpu) bg(giocaCpu(tavolo));
-    return json({ ok: true });
+    return json({ ok: true, ...ioOf(done as Load), stato: (done as Load).g, versione: (done as Load).ver });
   } catch (e) {
     if (e instanceof Errore) return json({ errore: e.message }, 400);
     console.error(e);
