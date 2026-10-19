@@ -64,3 +64,35 @@ create table public.chiavi (
 create index chiavi_giocatore_idx on public.chiavi (giocatore);
 alter table public.giocatori enable row level security;
 alter table public.chiavi enable row level security;
+
+-- una riga per ogni partita finita (le CPU non hanno profilo)
+create table public.partite (
+  id bigint generated always as identity primary key,
+  tavolo text not null,
+  finita_at timestamptz not null default now(),
+  giocatori jsonb not null,
+  punteggi int[] not null,
+  vincitori smallint not null,
+  mani smallint not null default 0
+);
+create index partite_giocatori_idx on public.partite using gin (giocatori jsonb_path_ops);
+create index partite_finita_idx on public.partite (finita_at desc);
+alter table public.partite enable row level security;
+
+-- classifica pubblica: solo nome, personaggio, partite e vittorie
+create function public.classifica()
+returns table (nick text, avatar smallint, partite int, vittorie int)
+language sql stable security definer set search_path = ''
+as $$
+  select coalesce(nullif(g.nick, ''), 'Giocatore') as nick, g.avatar,
+         count(*)::int as partite,
+         count(*) filter (where (x->>'team')::int = p.vincitori)::int as vittorie
+    from public.partite p
+    cross join lateral jsonb_array_elements(p.giocatori) as x
+    join public.giocatori g on g.id = x->>'pid'
+   group by g.id, g.nick, g.avatar
+   order by vittorie desc, partite asc, nick
+   limit 50;
+$$;
+revoke execute on function public.classifica() from public;
+grant execute on function public.classifica() to anon, authenticated;

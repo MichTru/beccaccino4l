@@ -91,8 +91,10 @@ async function save(id: string, L: Load, seed: number | null, posti: (string | n
 async function mossa(id: string, fn: (L: Load) => { seed?: number; posti?: (string | null)[] } | void) {
   for (let i = 0; i < 4; i++) {
     const L = await load(id);
+    const prima = L.g.status;
     const out = fn(L) || {};
     if (await save(id, L, out.seed ?? null, out.posti ?? null)) {
+      if (prima !== "end" && L.g.status === "end") await registraFine(id, L);
       if (out.posti) L.posti = out.posti;
       if (out.seed != null) L.seed = out.seed;
       L.ver += 1;
@@ -100,6 +102,16 @@ async function mossa(id: string, fn: (L: Load) => { seed?: number; posti?: (stri
     }
   }
   fail("Il tavolo è molto trafficato, riprova");
+}
+// partita finita: una riga nello storico per la classifica
+async function registraFine(id: string, L: Load) {
+  const g = L.g;
+  const giocatori = [0, 1, 2, 3].map((s) => ({
+    pid: g.seats[s] && !g.seats[s].bot ? L.posti[s] : null,
+    nick: g.seats[s] ? g.seats[s].nick : "", avatar: g.seats[s] ? g.seats[s].avatar ?? null : null,
+    bot: !!(g.seats[s] && g.seats[s].bot), team: s % 2,
+  }));
+  await rest("partite", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tavolo: id, giocatori, punteggi: g.scores, vincitori: g.winner, mani: (g.history || []).length }) }).catch((e) => console.error("storico", e));
 }
 const automatico = (g: any, s: number) => !!(g.seats[s] && (g.seats[s].bot || g.seats[s].away));
 
@@ -111,12 +123,14 @@ async function giocaCpu(id: string) {
     const a = R.actor(L.g);
     if (a < 0 || !automatico(L.g, a)) return;
     await sleep(L.g.hand.trick.length === 4 ? 950 : 550);
+    const prima = L.g.status;
     const ok = await save(id, (() => {
       if (L.g.status === "trump") R.chooseTrump(L.g, L.seed, R.botTrump(L.seed, a));
       else { const c = R.botPlay(L.g, L.seed, a); R.applyPlay(L.g, a, c, R.botSignal(L.g, L.seed, a, c)); }
       return L;
     })(), null, null).catch(() => false);
     if (!ok) continue;
+    if (prima !== "end" && L.g.status === "end") await registraFine(id, L);
   }
 }
 const bg = (p: Promise<unknown>) => {
@@ -168,6 +182,17 @@ Deno.serve(async (req) => {
       const since = new Date(Date.now() - 2 * 86400e3).toISOString();
       const ts = await rest(`tavoli?id=in.(${ids.map(enc).join(",")})&updated_at=gte.${enc(since)}&select=id,nome,stato,updated_at&order=updated_at.desc&limit=5`);
       return json({ tavoli: (ts || []).filter((t: any) => !["closed", "end"].includes(t.stato.status)) });
+    }
+
+    if (azione === "storico") {
+      const rows = await rest(`partite?giocatori=cs.${enc(JSON.stringify([{ pid: me }]))}&select=finita_at,giocatori,punteggi,vincitori,mani&order=finita_at.desc&limit=25`);
+      const out = (rows || []).map((r: any) => {
+        const mio = r.giocatori.find((x: any) => x.pid === me);
+        const t = mio ? mio.team : 0;
+        const nomi = (tt: number) => r.giocatori.filter((x: any) => x.team === tt).map((x: any) => ({ nick: x.nick, avatar: x.avatar, bot: x.bot }));
+        return { data: r.finita_at, noi: nomi(t), loro: nomi(1 - t), punti: [r.punteggi[t], r.punteggi[1 - t]], vinto: r.vincitori === t, mani: r.mani };
+      });
+      return json({ partite: out });
     }
 
     if (azione === "crea") {

@@ -1,0 +1,17 @@
+{
+  "name": "Beccaccino",
+  "short_name": "Beccaccino",
+  "description": "Beccaccino romagnolo online tra amici: due contro due, con la cricca, si va a 41.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E9DFCA",
+  "theme_color": "#3E2416",
+  "icons": [
+    { "src": "icona-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icona-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icona-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

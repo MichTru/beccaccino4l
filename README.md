@@ -1,18 +1,27 @@
 # Beccaccino
 
-Beccaccino romagnolo online per quattro giocatori, due contro due, con mazzo romagnolo da 40 carte.
+Beccaccino romagnolo online: quattro giocatori, due contro due, mazzo romagnolo da 40 carte.
+Si gioca su **michtru.github.io/beccaccino4l** e si può installare nella schermata Home.
 
-**Regole scelte:** cricca (Asso, Due e Tre di briscola = +3), segnali busso / striscio / volo, partita a 41.
+**Regole scelte:** cricca (Asso, Due e Tre di briscola = +3), segnali busso / striscio / volo,
+si va a 41. Nella prima mano parte chi ha il 4 di Denari.
 
-## Come si gioca
-1. Apri la pagina, scrivi il tuo nome e crea un tavolo.
-2. Manda il link agli amici con **Copia link**: aprono, scrivono il nome e si siedono.
-3. Se manca qualcuno, chi ha aperto il tavolo può aggiungere una CPU.
+## Cosa c'è
+- Tavoli online con link, QR o codice di 4 caratteri; chi apre il tavolo può aggiungere CPU e chiuderlo.
+- Profilo con 12 personaggi delle carte romagnole e codice personale di 6 caratteri per ritrovarsi da un altro telefono.
+- "Partite in corso" nel menu per riprendere il posto.
+- Se un giocatore non tocca carta per 60 secondi gioca la CPU al posto suo finché non torna.
+- Chat rapida con frasi romagnole ed emoji.
+- Classifica di tutti i giocatori e storico personale (contano solo le partite finite tra persone).
+- Allenamento da solo contro 3 CPU e tutorial guidato con consigli, entrambi anche senza rete.
 
-## Com'è fatto
-- `index.html` – la pagina del gioco (GitHub Pages).
-- `carte.webp` – il mazzo romagnolo, 4 righe (Bastoni, Coppe, Denari, Spade) × 10 colonne (Asso…7, Fante, Cavallo, Re).
-- `supabase/functions/beccaccino/` – la funzione sul server Supabase che applica le regole, distribuisce le carte e fa giocare le CPU. Le mani dei giocatori restano sul server.
+## File
+- `index.html` – la pagina del gioco. Il motore di allenamento e tutorial è una copia di `regole.js`, inserita al montaggio.
+- `carte.webp` – il mazzo, 4 righe (Bastoni, Coppe, Denari, Spade) × 10 colonne (Asso…7, Fante, Cavallo, Re).
+- `avatar.webp` – i 12 personaggi in fila: Re, Cavallo, Fante di Spade, Coppe, Denari, Bastoni.
+- `manifest.webmanifest`, `sw.js`, `icona-*.png` – installazione come app.
+- `supabase/functions/beccaccino/` – la funzione sul server: regole, CPU, profili, tempo di gioco, storico.
 - `supabase/migrations/` – tabelle del database.
 
-La chiave Supabase nella pagina è quella pubblica: legge solo i tavoli. Mazzo e chiavi dei giocatori li vede solo il server.
+La chiave Supabase nella pagina è quella pubblica: legge solo tavoli e classifica.
+Mazzo, chiavi dei giocatori e profili li vede solo il server.
