@@ -41,3 +41,7 @@ revoke execute on function public.salva_tavolo(text, integer, jsonb, bigint, jso
 grant execute on function public.salva_tavolo(text, integer, jsonb, bigint, jsonb) to service_role;
 
 alter publication supabase_realtime add table public.tavoli;
+
+-- codice breve per entrare al tavolo (liberato quando il tavolo si chiude)
+alter table public.tavoli add column codice text;
+create unique index tavoli_codice_key on public.tavoli (codice) where codice is not null;

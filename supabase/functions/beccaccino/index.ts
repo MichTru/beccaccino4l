@@ -29,18 +29,24 @@ async function hash(token: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("becca:" + token));
   return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+// codice di 4 caratteri senza lettere che si confondono (niente O/0, I/1, L)
+const ALFA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function nuovoCodice() {
+  const b = crypto.getRandomValues(new Uint8Array(4));
+  return Array.from(b, (x) => ALFA[x % ALFA.length]).join("");
+}
 const cleanNick = (n: unknown) => String(n ?? "").replace(/\s+/g, " ").trim().slice(0, 20);
 
-type Load = { g: any; ver: number; seed: number | null; posti: (string | null)[]; host: string };
+type Load = { g: any; ver: number; seed: number | null; posti: (string | null)[]; host: string; codice: string | null };
 async function load(id: string): Promise<Load> {
   const q = encodeURIComponent(id);
   const [ts, ss] = await Promise.all([
-    rest(`tavoli?id=eq.${q}&select=stato,versione`),
+    rest(`tavoli?id=eq.${q}&select=stato,versione,codice`),
     rest(`segreti?tavolo_id=eq.${q}&select=seed,posti,host`),
   ]);
   const t = ts && ts[0], s = ss && ss[0];
   if (!t || !s) fail("Tavolo non trovato");
-  return { g: t!.stato, ver: t!.versione, seed: s!.seed, posti: s!.posti, host: s!.host };
+  return { g: t!.stato, ver: t!.versione, seed: s!.seed, posti: s!.posti, host: s!.host, codice: t!.codice ?? null };
 }
 async function save(id: string, L: Load, seed: number | null, posti: (string | null)[] | null) {
   const data = await rest("rpc/salva_tavolo", { method: "POST", body: JSON.stringify({ p_id: id, p_ver: L.ver, p_stato: L.g, p_seed: seed, p_posti: posti }) });
@@ -101,11 +107,21 @@ Deno.serve(async (req) => {
       const nick = cleanNick(body.nick) || fail("Scrivi il tuo nome");
       const id = "t" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
       const stato = { hostNick: nick, seats: [{ nick, bot: false }, null, null, null], status: "lobby", scores: [0, 0], history: [], hand: null, log: [], winner: null };
+      let codice = "";
+      for (let i = 0; i < 6 && !codice; i++) {
+        const c = nuovoCodice();
+        try {
+          await rest("tavoli", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id, nome: "Tavolo di " + nick, stato, codice: c }) });
+          codice = c;
+        } catch (e) {
+          if (!String(e).includes("409") && !String(e).includes("23505")) fail("Non riesco a creare il tavolo");
+        }
+      }
+      if (!codice) fail("Non riesco a creare il tavolo, riprova");
       try {
-        await rest("tavoli", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id, nome: "Tavolo di " + nick, stato }) });
         await rest("segreti", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tavolo_id: id, host: me, posti: [me, null, null, null] }) });
       } catch (_) { fail("Non riesco a creare il tavolo"); }
-      return json({ id });
+      return json({ id, codice });
     }
 
     if (typeof tavolo !== "string" || !/^t[a-z0-9]{4,20}$/.test(tavolo)) fail("Tavolo non valido");
@@ -114,7 +130,7 @@ Deno.serve(async (req) => {
       const s = seatOf(L);
       const mano = s >= 0 && L.g.hand && L.seed != null ? R.handOf(L.g, L.seed, s) : [];
       const legali = s >= 0 && L.g.status === "play" && L.g.hand.turn === s && L.seed != null ? R.legal(L.g, L.seed, s) : [];
-      return { seat: s, host: L.host === me, mano, legali, n: L.g.hand ? L.g.hand.n : 0 };
+      return { seat: s, host: L.host === me, mano, legali, n: L.g.hand ? L.g.hand.n : 0, codice: L.g.status === "closed" ? null : L.codice };
     };
     if (azione === "info") {
       const L = await load(tavolo);
@@ -125,6 +141,7 @@ Deno.serve(async (req) => {
     const done = await mossa(tavolo, (L) => {
       const g = L.g, s = seatOf(L), host = L.host === me;
       const posti = L.posti.slice();
+      if (g.status === "closed" && azione !== "chiudi") fail("Questo tavolo è stato chiuso");
       switch (azione) {
         case "siedi": {
           const i = Number(body.seat), nick = cleanNick(body.nick) || fail("Scrivi il tuo nome");
@@ -174,6 +191,12 @@ Deno.serve(async (req) => {
           cpu = true;
           return { seed: R.newHand(g, g.hand.n + 1, (g.hand.leader + 1) % 4) };
         }
+        case "chiudi": {
+          if (!host) fail("Solo chi ha aperto il tavolo può chiuderlo");
+          if (g.status === "closed") return;
+          g.status = "closed";
+          return;
+        }
         case "rivincita": {
           if (g.status !== "end") fail("La partita non è finita");
           if (s < 0 && !host) fail("Non sei al tavolo");
@@ -183,6 +206,9 @@ Deno.serve(async (req) => {
         default: fail("Azione sconosciuta");
       }
     });
+    if (azione === "chiudi") {
+      await rest(`tavoli?id=eq.${encodeURIComponent(tavolo)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ codice: null }) }).catch(() => {});
+    }
     if (cpu) bg(giocaCpu(tavolo));
     return json({ ok: true, ...ioOf(done as Load), stato: (done as Load).g, versione: (done as Load).ver });
   } catch (e) {

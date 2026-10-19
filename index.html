@@ -86,6 +86,18 @@ input{font:inherit;font-weight:700;font-size:1.05rem;background:#FBF6EC;color:va
 .welcome .wq{font-size:1.5rem;color:var(--ink)}
 .hello{display:flex;align-items:center;gap:12px}
 .hello b{display:block;font-family:var(--f-display);font-size:1.35rem;font-weight:900;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.danger{background:#F6E2D8;color:var(--ruggine-d);box-shadow:0 3px 0 #E2BFAE}
+.btn.danger:active{box-shadow:0 1px 0 #E2BFAE}
+.joinrow{display:flex;gap:8px;align-items:stretch}
+.codein{flex:1;min-width:0;text-align:center;font-family:var(--f-display);font-weight:900;font-size:1.35rem;letter-spacing:.32em;text-transform:uppercase;padding:10px 12px}
+.codein::placeholder{letter-spacing:.2em;font-size:1rem;color:#b3a48a}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.codebox{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px}
+.codebox .eyebrow{grid-column:1/-1}
+.code{font-family:var(--f-display);font-weight:900;font-size:2.4rem;letter-spacing:.22em;color:var(--ruggine);line-height:1.05}
+.code.sm{font-size:1.1rem;letter-spacing:.14em}
+.qrbox .code{margin:0;font-size:2rem}
+.sheet.pause .btn{width:100%}
 /* avatar */
 .av{--c:var(--ruggine);position:relative;flex:none;width:40px;height:40px;border-radius:50%;background:var(--c);color:var(--on-dark);
   display:inline-flex;align-items:center;justify-content:center;font-family:var(--f-display);font-weight:900;font-size:1rem;
@@ -249,6 +261,7 @@ dialog#qr::backdrop{background:#2B221Cb3}
   <div class="qrbox">
     <h2 id="qr-t">Inquadra per sederti</h2>
     <div id="qr-code" class="qrcode"></div>
+    <p class="code" id="qr-code-txt" hidden></p>
     <p class="small muted" id="qr-who"></p>
     <p class="qrlink" id="qr-link"></p>
     <button class="btn primary" id="qr-close">Chiudi</button>
@@ -332,9 +345,9 @@ const app=document.getElementById("app"), gameEl=document.getElementById("game")
 const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 let token="", myNick="", askName=false, afterName=null;
 let tables=[], g=null, ver=-1, tableId=null, missing=false;
-let io={seat:-1, host:false};
+let io={seat:-1, host:false, codice:null};
 let mano=[], manoN=-1, infoBusy=false;
-let sig=null, working=false, pending=null;
+let sig=null, working=false, pending=null, menuOpen=false, confirmClose=false, confirmT=null;
 let chan=null, pollT=null;
 let fx={enter:null, deal:false};
 
@@ -385,7 +398,8 @@ async function boot(){
   if(linked) openTable(h); else { render(); loadTables(); }
 }
 async function loadTables(){
-  const {data,error} = await sb.from("tavoli").select("id,nome,stato,updated_at").order("updated_at",{ascending:false}).limit(20);
+  const since=new Date(Date.now()-24*3600e3).toISOString();
+  const {data,error} = await sb.from("tavoli").select("id,nome,stato,updated_at").neq("stato->>status","closed").gte("updated_at",since).order("updated_at",{ascending:false}).limit(20);
   if(error){ toast("Non riesco a leggere i tavoli"); return; }
   tables=data||[]; if(!tableId && myNick && !askName) render();
 }
@@ -394,8 +408,13 @@ async function loadTables(){
 function applyState(stato, versione, mine){
   if(!stato || versione<ver) return;
   if(versione===ver && !mine) return;
+  if(stato.status==="closed"){
+    const wasHost = mine ? mine.host : io.host;
+    toast(wasHost ? "Tavolo chiuso" : "Chi aveva aperto il tavolo l'ha chiuso");
+    closeTable(); return;
+  }
   if(mine){
-    io={seat:mine.seat, host:mine.host};
+    io={seat:mine.seat, host:mine.host, codice:mine.codice||null};
     if(Array.isArray(mine.mano)){ mano=mine.mano; manoN=mine.n; }
   }
   let need=false;
@@ -424,7 +443,7 @@ async function poll(){
 function openTable(id){
   if(chan){ sb.removeChannel(chan); chan=null; }
   clearInterval(pollT);
-  tableId=id; g=null; ver=-1; io={seat:-1,host:false}; mano=[]; manoN=-1; sig=null; missing=false;
+  tableId=id; g=null; ver=-1; io={seat:-1,host:false,codice:null}; mano=[]; manoN=-1; sig=null; missing=false; menuOpen=false; confirmClose=false;
   if(location.hash!=="#"+id){ try{ history.replaceState(null,"","#"+id); }catch(e){} }
   render();
   chan=sb.channel("tavolo-"+id)
@@ -435,7 +454,7 @@ function openTable(id){
 }
 function closeTable(){
   if(chan){ sb.removeChannel(chan); chan=null; }
-  clearInterval(pollT); tableId=null; g=null; ver=-1;
+  clearInterval(pollT); tableId=null; g=null; ver=-1; menuOpen=false; confirmClose=false;
   try{ history.replaceState(null,"",location.pathname); }catch(e){}
   render(); loadTables();
 }
@@ -460,6 +479,20 @@ async function createTable(){
   if(needNick()||working) return; working=true;
   try{ const {id}=await call("crea",{nick:myNick}); working=false; openTable(id); }
   catch(e){ toast(e.message); } finally{ working=false; }
+}
+const CODE_OK=/^[A-HJKMNP-Z2-9]{4}$/;
+async function joinByCode(raw){
+  const code=String(raw||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(code.length!==4){ toast("Il codice ha 4 caratteri"); return; }
+  if(!CODE_OK.test(code)){ toast("Nessun tavolo con il codice "+code); return; }
+  const {data,error}=await sb.from("tavoli").select("id,stato").eq("codice",code).maybeSingle();
+  if(error){ toast("Non riesco a cercare il tavolo, riprova"); return; }
+  if(!data || (data.stato&&data.stato.status==="closed")){ toast("Nessun tavolo aperto con il codice "+code); return; }
+  openTable(data.id);
+}
+function askClose(){
+  if(!confirmClose){ confirmClose=true; clearTimeout(confirmT); confirmT=setTimeout(()=>{ confirmClose=false; render(); },4000); render(); return; }
+  confirmClose=false; clearTimeout(confirmT); act("chiudi");
 }
 function legalNow(){
   if(!g||g.status!=="play"||!g.hand||g.hand.turn!==io.seat||pending) return [];
@@ -556,6 +589,7 @@ function showQr(){
   const free=g?g.seats.filter(x=>!x).length:0;
   document.getElementById("qr-who").textContent = g&&g.status==="lobby" ? (free?`${free} ${free===1?"posto libero":"posti liberi"} al tavolo di ${g.hostNick||""}`:"Il tavolo è pieno, si può solo guardare") : "La partita è in corso: chi entra adesso guarda";
   document.getElementById("qr-link").textContent=url;
+  const qc=document.getElementById("qr-code-txt"); qc.textContent=io.codice||""; qc.hidden=!io.codice;
   if(d.showModal) d.showModal(); else d.setAttribute("open","");
 }
 async function share(){
@@ -621,6 +655,8 @@ function homeView(){
   <div class="panel">
     <div class="hello"><span class="av lg" style="--c:var(--ruggine)" aria-hidden="true">${esc(initials(myNick))}</span><div class="grow"><span class="eyebrow">Al tavolo come</span><b>${esc(myNick)}</b></div><button class="btn sm" data-rename>Cambia nome</button></div>
     <button class="btn primary big" id="create">Apri un tavolo</button>
+    <span class="eyebrow">Hai un codice? Entra al tavolo di un amico</span>
+    <form class="joinrow" id="joinf" autocomplete="off"><label class="sr" for="code">Codice del tavolo</label><input id="code" class="codein" maxlength="4" placeholder="CODICE" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go"><button class="btn green" type="submit">Entra</button></form>
   </div>
   <div class="panel"><span class="eyebrow">Tavoli aperti</span><div class="tlist">${list}</div></div>
   ${rulesHTML()}`;
@@ -654,8 +690,12 @@ function lobbyView(){
     <div class="lobbytable">${[0,1,2,3].map(seat).join("")}<div class="minicloth"><span class="a">Coppia A<br>posti 1 e 3</span><span>contro</span><span class="b">Coppia B<br>posti 2 e 4</span></div></div>
     ${host?`<button class="btn primary big" data-start ${full?"":"disabled"}>${full?"Dai le carte":`Mancano ${g.seats.filter(x=>!x).length} giocatori`}</button>`:`<p class="note">${full?"Si aspetta che chi ha aperto il tavolo dia le carte.":"In attesa di altri giocatori…"}</p>`}
   </div>
-  <div class="row"><button class="btn green grow" data-qr>${I_QR} Mostra QR</button><button class="btn grow" data-share>${I_SHARE} Invita</button></div>
-  <p class="note">Chi è vicino inquadra il QR; agli altri manda il link. Scrivono il nome e si siedono.</p>
+  <div class="panel invite">
+    ${io.codice?`<div class="codebox"><span class="eyebrow">Codice del tavolo</span><span class="code" aria-label="Codice ${io.codice.split("").join(" ")}">${io.codice}</span><button class="btn sm" data-copycode>Copia</button></div>`:""}
+    <div class="row"><button class="btn green grow" data-qr>${I_QR} Mostra QR</button><button class="btn grow" data-share>${I_SHARE} Invita</button></div>
+    <p class="note">Chi è vicino inquadra il QR o scrive il codice nel menu. Agli altri manda il link.</p>
+  </div>
+  ${host?`<button class="btn danger" data-close>${confirmClose?"Tocca di nuovo: chiudi per tutti":"Chiudi tavolo"}</button>`:""}
   ${rulesHTML()}`;
 }
 
@@ -672,7 +712,7 @@ function gameView(){
   const tr=h&&h.trump;
   const team=(t,cls,lab)=>`<div class="team ${cls}"><span class="tl">${lab}</span><span class="tp">${g.scores[t]}</span><span class="bar"><i style="width:${Math.min(100,g.scores[t]/TARGET*100)}%"></i></span></div>`;
   const hud=`<div class="hud">
-    <button class="hic" data-back aria-label="Esci dal tavolo">${I_BACK}</button>
+    <button class="hic" data-menu aria-label="Menu del tavolo" aria-expanded="${menuOpen}">${I_BACK}</button>
     <div class="board-score">${team(usT,"us",me_>=0?"Noi":"Coppia A")}
       <div><div class="trumpmed" style="color:${tr?suitColor(tr):"inherit"}" title="Briscola">${tr?ICON[tr]:'<span class="q">?</span>'}</div><div class="trumplab">${tr?SUIT_NAME[tr]:"Briscola"}</div></div>
       ${team(themT,"them r",me_>=0?"Loro":"Coppia B")}</div>
@@ -697,6 +737,13 @@ function gameView(){
   }
   // centro: scelta briscola, fine mano, stato
   let center="", status="";
+  const menu = menuOpen ? `<div class="sheet pause"><h2>Tavolo</h2>
+      ${io.codice?`<p class="small muted">Codice <b class="code sm">${io.codice}</b></p>`:""}
+      <button class="btn primary big" data-resume>Torna a giocare</button>
+      <button class="btn" data-back>Esci al menu</button>
+      <p class="small muted">Il tuo posto resta: rientri dal menu quando vuoi.</p>
+      ${io.host?`<button class="btn danger" data-close>${confirmClose?"Tocca di nuovo: chiudi per tutti":"Chiudi il tavolo per tutti"}</button>`:""}
+    </div>` : "";
   if(g.status==="trump" && h.leader===me_){
     center=`<div class="pick"><h3>Scegli la briscola</h3><div class="g4">${SUITS.map(su=>`<button data-trump="${su}" style="color:${suitColor(su)}">${ICON[su]}<span style="color:var(--ink)">${SUIT_NAME[su]}</span><small>${mano.filter(c=>cs(c)===su).length} carte</small></button>`).join("")}</div></div>`;
   } else if(g.status==="handEnd"||g.status==="end"){
@@ -734,7 +781,7 @@ function gameView(){
   } else {
     hand=`<div class="handzone" style="--hw:${hw}px;height:40px"></div>`;
   }
-  return `<div class="wrap">${hud}<div class="board" style="--tw:${tw}px"><div class="cloth"></div>${players}<div class="trick" aria-live="polite">${trick}</div>${status}${center}</div>${hand}</div>`;
+  return `<div class="wrap">${hud}<div class="board" style="--tw:${tw}px"><div class="cloth"></div>${players}<div class="trick" aria-live="polite">${trick}</div>${status}${menu||center}</div>${hand}</div>`;
 }
 
 // ---------- eventi ----------
@@ -742,6 +789,10 @@ function wireApp(){
   const on=(sel,fn)=>app.querySelectorAll(sel).forEach(el=>el.addEventListener("click",()=>fn(el)));
   on("[data-rename]",()=>{ askName=true; render(); window.scrollTo(0,0); });
   document.getElementById("create")?.addEventListener("click",createTable);
+  const jf=document.getElementById("joinf"), ci=document.getElementById("code");
+  if(jf){ ci.addEventListener("input",()=>{ ci.value=ci.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,4); }); jf.addEventListener("submit",e=>{ e.preventDefault(); joinByCode(ci.value); }); }
+  on("[data-close]",askClose);
+  on("[data-copycode]",async()=>{ try{ await navigator.clipboard.writeText(io.codice); toast("Codice copiato"); }catch(e){ toast("Codice: "+io.codice); } });
   on("[data-open]",el=>openTable(el.dataset.open));
   on("[data-back]",closeTable);
   on("[data-mute]",toggleSnd);
@@ -755,6 +806,9 @@ function wireApp(){
 function wireGame(){
   const on=(sel,fn)=>gameEl.querySelectorAll(sel).forEach(el=>el.addEventListener("click",()=>fn(el)));
   on("[data-back]",closeTable);
+  on("[data-menu]",()=>{ menuOpen=!menuOpen; confirmClose=false; render(); });
+  on("[data-resume]",()=>{ menuOpen=false; confirmClose=false; render(); });
+  on("[data-close]",askClose);
   on("[data-mute]",toggleSnd);
   on("[data-qr]",showQr);
   on("[data-trump]",el=>act("briscola",{seme:el.dataset.trump}));
