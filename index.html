@@ -82,6 +82,10 @@ input{font:inherit;font-weight:700;font-size:1.05rem;background:#FBF6EC;color:va
 .ic:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .ic svg{width:20px;height:20px}
 
+.welcome{min-height:calc(100dvh - 64px);display:flex;flex-direction:column;justify-content:center;gap:18px;padding-bottom:24px}
+.welcome .wq{font-size:1.5rem;color:var(--ink)}
+.hello{display:flex;align-items:center;gap:12px}
+.hello b{display:block;font-family:var(--f-display);font-size:1.35rem;font-weight:900;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* avatar */
 .av{--c:var(--ruggine);position:relative;flex:none;width:40px;height:40px;border-radius:50%;background:var(--c);color:var(--on-dark);
   display:inline-flex;align-items:center;justify-content:center;font-family:var(--f-display);font-weight:900;font-size:1rem;
@@ -326,7 +330,7 @@ const Snd = {
 // ---------- stato ----------
 const app=document.getElementById("app"), gameEl=document.getElementById("game");
 const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
-let token="", myNick="";
+let token="", myNick="", askName=false, afterName=null;
 let tables=[], g=null, ver=-1, tableId=null, missing=false;
 let io={seat:-1, host:false};
 let mano=[], manoN=-1, infoBusy=false;
@@ -375,14 +379,15 @@ async function boot(){
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden && tableId) poll(); });
   if(!sb){ app.innerHTML=`<p class="note">Non riesco a collegarmi al server. Controlla la connessione e ricarica la pagina.</p>`; return; }
   sb.channel("lista").on("postgres_changes",{event:"*",schema:"public",table:"tavoli"},()=>{ if(!tableId) loadTables(); }).subscribe();
-  window.addEventListener("hashchange",()=>{ const x=(location.hash||"").slice(1); if(/^t[a-z0-9]{4,20}$/.test(x) && x!==tableId) openTable(x); });
-  const h=(location.hash||"").slice(1);
-  if(/^t[a-z0-9]{4,20}$/.test(h)) openTable(h); else { render(); loadTables(); }
+  window.addEventListener("hashchange",()=>{ const x=(location.hash||"").slice(1); if(!/^t[a-z0-9]{4,20}$/.test(x) || x===tableId) return; if(!myNick){ afterName=x; render(); } else openTable(x); });
+  const h=(location.hash||"").slice(1), linked=/^t[a-z0-9]{4,20}$/.test(h);
+  if(!myNick){ afterName = linked ? h : null; render(); loadTables(); return; }
+  if(linked) openTable(h); else { render(); loadTables(); }
 }
 async function loadTables(){
   const {data,error} = await sb.from("tavoli").select("id,nome,stato,updated_at").order("updated_at",{ascending:false}).limit(20);
   if(error){ toast("Non riesco a leggere i tavoli"); return; }
-  tables=data||[]; if(!tableId) render();
+  tables=data||[]; if(!tableId && myNick && !askName) render();
 }
 
 // ---------- stato del tavolo: un solo punto d'ingresso ----------
@@ -436,7 +441,15 @@ function closeTable(){
 }
 
 // ---------- azioni ----------
-function needNick(){ if(myNick) return false; toast("Scrivi prima il tuo nome"); document.getElementById("nick")?.focus(); return true; }
+function needNick(){ if(myNick) return false; askName=true; render(); return true; }
+function saveName(v){
+  const n=String(v||"").replace(/\s+/g," ").trim().slice(0,20);
+  if(!n){ toast("Scrivi come ti chiami"); document.getElementById("nick")?.focus(); return; }
+  myNick=n; store("becca-nick",n); askName=false;
+  Snd.init();
+  const go=afterName; afterName=null;
+  if(go) openTable(go); else render();
+}
 async function act(azione, extra){
   if(working) return false; working=true;
   try{ const r=await call(azione,extra); applyState(r.stato,r.versione,r); return true; }
@@ -553,6 +566,10 @@ async function share(){
 
 // ---------- disegno ----------
 function render(){
+  if(!myNick || askName){
+    document.body.classList.remove("in-game"); gameEl.hidden=true; app.hidden=false;
+    app.innerHTML=welcomeView(); wireWelcome(); return;
+  }
   const inGame = tableId && g && g.status!=="lobby";
   document.body.classList.toggle("in-game", !!inGame);
   gameEl.hidden = !inGame; app.hidden = !!inGame;
@@ -563,6 +580,33 @@ function render(){
 }
 const sndBtn = cls => `<button class="${cls}" data-mute aria-label="${Snd.on?"Togli i suoni":"Attiva i suoni"}">${Snd.on?I_ON:I_OFF}</button>`;
 
+function logoFan(){
+  return ["D1","C1","S1","B1"].map((c,i)=>`<span class="card" style="${spritePos(c)};transform:translateX(-50%) rotate(${(i-1.5)*14}deg) translateY(${Math.abs(i-1.5)*6}px)"></span>`).join("");
+}
+function welcomeView(){
+  const renaming = askName && !!myNick;
+  const invited = afterName ? tables.find(t=>t.id===afterName) : null;
+  const sub = renaming ? "Il nuovo nome vale per i prossimi tavoli."
+    : afterName ? `Ti aspettano ${invited&&invited.stato&&invited.stato.hostNick?"al tavolo di "+esc(invited.stato.hostNick):"a un tavolo"}: dicci solo come ti chiami.`
+    : "Te lo chiedo una volta sola: lo vedranno gli altri al tavolo.";
+  return `<form class="welcome" id="namef" autocomplete="off">
+    <div class="logo"><div class="fan4" aria-hidden="true">${logoFan()}</div><h1>Beccaccino</h1><span class="tag">Romagnolo · si va a ${TARGET}</span></div>
+    <div class="band" aria-hidden="true"></div>
+    <div class="panel">
+      <label for="nick"><h2 class="wq">Come ti chiamano al tavolo?</h2></label>
+      <p class="small muted">${sub}</p>
+      <input id="nick" name="nick" maxlength="20" placeholder="Es. Michele" value="${esc(myNick)}" autocomplete="nickname" enterkeyhint="go" autocapitalize="words">
+      <button class="btn primary big" type="submit">${afterName?"Vai al tavolo":renaming?"Salva":"Entra"}</button>
+      ${renaming?`<button class="btn" type="button" data-cancel>Annulla</button>`:""}
+    </div>
+  </form>`;
+}
+function wireWelcome(){
+  const f=document.getElementById("namef"), nk=document.getElementById("nick");
+  f.addEventListener("submit",e=>{ e.preventDefault(); saveName(nk.value); });
+  app.querySelector("[data-cancel]")?.addEventListener("click",()=>{ askName=false; render(); });
+  if(!myNick) setTimeout(()=>nk.focus(),250);
+}
 function homeView(){
   const list = tables.length ? tables.map(t=>{
     const st=t.stato||{}, seats=st.seats||[], n=seats.filter(Boolean).length;
@@ -570,14 +614,12 @@ function homeView(){
     const avs = seats.map((x,i)=>x?avatar(st,i,"sm"):"").join("");
     return `<button class="titem" data-open="${esc(t.id)}"><span class="avs">${avs}</span><span class="grow"><b>${esc(t.nome)}</b><br><span class="meta">${seats.filter(Boolean).map(x=>esc(x.nick)).join(", ")||"nessuno seduto"}</span></span>${pill}</button>`;
   }).join("") : `<p class="note">Nessun tavolo aperto. Creane uno e chiama gli amici.</p>`;
-  const fan=["D1","C1","S1","B1"].map((c,i)=>`<span class="card" style="${spritePos(c)};transform:translateX(-50%) rotate(${(i-1.5)*14}deg) translateY(${Math.abs(i-1.5)*6}px)"></span>`).join("");
   return `
   <div class="row" style="justify-content:flex-end">${sndBtn("ic")}</div>
-  <div class="logo"><div class="fan4" aria-hidden="true">${fan}</div><h1>Beccaccino</h1><span class="tag">Romagnolo · si va a ${TARGET}</span></div>
+  <div class="logo"><div class="fan4" aria-hidden="true">${logoFan()}</div><h1>Beccaccino</h1><span class="tag">Romagnolo · si va a ${TARGET}</span></div>
   <div class="band" aria-hidden="true"></div>
   <div class="panel">
-    <label class="eyebrow" for="nick">Il tuo nome</label>
-    <input id="nick" maxlength="20" placeholder="Come ti chiamano al bar?" value="${esc(myNick)}" autocomplete="nickname">
+    <div class="hello"><span class="av lg" style="--c:var(--ruggine)" aria-hidden="true">${esc(initials(myNick))}</span><div class="grow"><span class="eyebrow">Al tavolo come</span><b>${esc(myNick)}</b></div><button class="btn sm" data-rename>Cambia nome</button></div>
     <button class="btn primary big" id="create">Apri un tavolo</button>
   </div>
   <div class="panel"><span class="eyebrow">Tavoli aperti</span><div class="tlist">${list}</div></div>
@@ -698,8 +740,7 @@ function gameView(){
 // ---------- eventi ----------
 function wireApp(){
   const on=(sel,fn)=>app.querySelectorAll(sel).forEach(el=>el.addEventListener("click",()=>fn(el)));
-  const nk=document.getElementById("nick");
-  if(nk) nk.addEventListener("input",()=>{ myNick=nk.value.trim().slice(0,20); store("becca-nick",myNick); });
+  on("[data-rename]",()=>{ askName=true; render(); window.scrollTo(0,0); });
   document.getElementById("create")?.addEventListener("click",createTable);
   on("[data-open]",el=>openTable(el.dataset.open));
   on("[data-back]",closeTable);
