@@ -154,8 +154,9 @@ input{font:inherit;background:#FBF6EC;color:var(--ink);border:1px solid var(--li
 /* lobby */
 .seats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .seatbox{background:#FBF6EC;border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.seatbox .who{display:flex;align-items:center;gap:8px;font-weight:600;min-width:0}
-.seatbox .who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seatbox .eyebrow{letter-spacing:.08em}
+.seatbox .who{padding-bottom:4px;display:flex;align-items:center;gap:8px;font-weight:600;min-width:0}
+.seatbox .who > span:not(.av){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .seatbox.t0{border-top:3px solid var(--ruggine)} .seatbox.t1{border-top:3px solid var(--rame)}
 .seatbox .row button{padding:6px 10px;font-size:.82rem}
 .empty-av{width:36px;height:36px;border-radius:50%;border:2px dashed var(--line);flex:none}
@@ -171,13 +172,31 @@ details{background:var(--panel);border:1px solid var(--line);border-radius:14px;
 details summary{cursor:pointer;font-weight:600}
 details ul{margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:.9rem;max-width:65ch}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--panel);padding:10px 14px;border-radius:10px;font-weight:600;font-size:.9rem;z-index:20;max-width:calc(100% - 32px)}
+dialog#qr{border:0;padding:0;background:transparent;max-width:calc(100% - 32px);overflow:visible}
+dialog#qr::backdrop{background:#2B221Cb3}
+.qrbox{box-sizing:border-box;background:var(--panel);border-radius:18px;border-top:5px solid var(--ruggine);padding:20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;width:min(340px,calc(100vw - 32px))}
+.qrcode{background:#FFFDF8;border-radius:12px;padding:12px;width:100%;max-width:280px}
+.qrcode svg{display:block;width:100%;height:auto}
+.qrlink{font-size:.78rem;color:var(--muted);word-break:break-all;user-select:all}
+.qrbox button{width:100%}
+button.primary svg{width:18px;height:18px;vertical-align:-3px;margin-right:4px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div id="app"><p class="muted">Apro il mazzo…</p></div>
 <div id="toast" class="toast" hidden></div>
+<dialog id="qr" aria-labelledby="qr-t">
+  <div class="qrbox">
+    <h2 id="qr-t">Inquadra per sederti</h2>
+    <div id="qr-code" class="qrcode"></div>
+    <p class="small muted" id="qr-who"></p>
+    <p class="qrlink" id="qr-link"></p>
+    <button class="primary" id="qr-close">Chiudi</button>
+  </div>
+</dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 (() => {
 "use strict";
@@ -245,6 +264,22 @@ const Snd = {
 };
 const SPEAKER_ON='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 const SPEAKER_OFF='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>';
+const SHARE_ICON='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+const QR_ICON='<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M3 3h8v8H3zm2 2v4h4V5zM13 3h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zM13 13h3v3h-3zm5 0h3v3h-3zm-5 5h3v3h-3zm5 0h3v3h-3zm-2.5-2.5h2v2h-2z"/><path d="M6 6h2v2H6zm10 0h2v2h-2zM6 16h2v2H6z"/></svg>';
+function showQr(){
+  const d=document.getElementById("qr"), url=location.origin+location.pathname+"#"+tableId;
+  const box=document.getElementById("qr-code");
+  if(window.qrcode){
+    const q=qrcode(0,"M"); q.addData(url); q.make();
+    const n=q.getModuleCount(); let p="";
+    for(let r=0;r<n;r++) for(let c=0;c<n;c++) if(q.isDark(r,c)) p+=`M${c} ${r}h1v1h-1z`;
+    box.innerHTML=`<svg viewBox="-2 -2 ${n+4} ${n+4}" shape-rendering="crispEdges" role="img" aria-label="Codice QR del tavolo"><rect x="-2" y="-2" width="${n+4}" height="${n+4}" fill="#FFFDF8"/><path d="${p}" fill="#2B221C"/></svg>`;
+  } else box.innerHTML='<p class="small">Non riesco a disegnare il QR: usa il link qui sotto.</p>';
+  const free = g ? g.seats.filter(x=>!x).length : 0;
+  document.getElementById("qr-who").textContent = g && g.status==="lobby" ? (free ? `${free} ${free===1?"posto libero":"posti liberi"} al tavolo di ${g.hostNick||""}` : "Il tavolo è pieno, si può solo guardare") : "La partita è in corso: chi entra adesso può guardare";
+  document.getElementById("qr-link").textContent=url;
+  if(d.showModal) d.showModal(); else d.setAttribute("open","");
+}
 const muteBtn = () => `<button class="ghost icon" data-mute aria-pressed="${!Snd.on}" aria-label="${Snd.on?"Togli i suoni":"Attiva i suoni"}">${Snd.on?SPEAKER_ON:SPEAKER_OFF}</button>`;
 
 // ---------- avatar ----------
@@ -295,6 +330,8 @@ async function boot(){
   myNick = load("becca-nick");
   Snd.on = load("becca-suoni")!=="0";
   document.addEventListener("pointerdown",()=>Snd.init(),{passive:true});
+  document.getElementById("qr-close").addEventListener("click",()=>document.getElementById("qr").close());
+  document.getElementById("qr").addEventListener("click",e=>{ if(e.target.id==="qr") e.target.close(); });
   if(!sb){ app.innerHTML = `<p class="note">Non riesco a caricare il collegamento al server. Controlla la connessione e ricarica la pagina.</p>`; return; }
   await loadTables();
   listChan = sb.channel("lista").on("postgres_changes",{event:"*",schema:"public",table:"tavoli"},()=>{ if(!tableId) loadTables(); }).subscribe();
@@ -456,7 +493,7 @@ function rulesHTML(){
 function tableView(){
   if(!g) return `<div class="top"><button class="ghost" data-back>← Tavoli</button><h2>${missing?"Tavolo non trovato":"Mi siedo…"}</h2></div>`;
   const me_=io.seat;
-  const head=`<div class="top"><button class="ghost" data-back aria-label="Torna ai tavoli">←</button><h2>${esc("Tavolo di "+(g.hostNick||""))}</h2>${muteBtn()}<button class="ghost" data-copy>Copia link</button></div>`;
+  const head=`<div class="top"><button class="ghost" data-back aria-label="Torna ai tavoli">←</button><h2>${esc("Tavolo di "+(g.hostNick||""))}</h2>${muteBtn()}<button class="ghost icon" data-qr aria-label="Mostra il QR del tavolo">${QR_ICON}</button><button class="ghost icon" data-copy aria-label="Condividi il link del tavolo">${SHARE_ICON}</button></div>`;
   if(g.status==="lobby") return head+lobbyView(me_);
   return head+scoreHTML(me_)+feltHTML(me_)+bottomHTML(me_)+logHTML()+rulesHTML();
 }
@@ -468,7 +505,7 @@ function lobbyView(me_){
     let btns="";
     if(!x){ btns+=`<button data-sit="${i}">Siediti</button>`; if(host) btns+=`<button class="ghost" data-bot="${i}">+ CPU</button>`; }
     else if(i===me_ || host){ btns+=`<button class="ghost" data-leave="${i}">${i===me_?"Alzati":"Togli"}</button>`; }
-    return `<div class="seatbox t${i%2}"><span class="eyebrow">Posto ${i+1} · Coppia ${i%2?"B":"A"}</span><span class="who">${who}</span><div class="row">${btns}</div></div>`;
+    return `<div class="seatbox t${i%2}"><span class="eyebrow">Posto ${i+1} · ${i%2?"B":"A"}</span><span class="who">${who}</span><div class="row">${btns}</div></div>`;
   }).join("");
   const full=g.seats.every(Boolean);
   return `<div class="panel"><span class="eyebrow">Al tavolo</span>
@@ -476,7 +513,8 @@ function lobbyView(me_){
     <div class="seats">${boxes}</div>
     ${host?`<button class="primary" data-start ${full?"":"disabled"}>${full?"Dai le carte":"Servono 4 giocatori"}</button>`:`<p class="small muted">${full?"Aspetta che chi ha aperto il tavolo dia le carte.":"In attesa di altri giocatori."}</p>`}
   </div>
-  <p class="note">Per invitare gli amici tocca <b>Copia link</b> e mandalo nel gruppo. Basta aprirlo, scrivere il nome e sedersi.</p>
+  <div class="row"><button class="primary grow" data-qr>${QR_ICON} Mostra QR</button><button class="grow" data-copy>Manda il link</button></div>
+  <p class="note">Chi è vicino a te inquadra il QR con la fotocamera; agli altri manda il link. Poi scrivono il nome e si siedono.</p>
   ${rulesHTML()}`;
 }
 function scoreHTML(me_){
@@ -555,6 +593,7 @@ function wire(){
   const nk=document.getElementById("nick");
   if(nk) nk.addEventListener("input",()=>{ myNick=nk.value.trim().slice(0,20); store("becca-nick",myNick); });
   document.getElementById("create")?.addEventListener("click",createTable);
+  on("[data-qr]",showQr);
   on("[data-mute]",()=>{ Snd.on=!Snd.on; store("becca-suoni",Snd.on?"1":"0"); if(Snd.on){ Snd.init(); Snd.card(); } render(); });
   on("[data-open]",el=>openTable(el.dataset.open));
   on("[data-back]",closeTable);
