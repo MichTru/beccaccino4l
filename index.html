@@ -344,6 +344,22 @@ dialog#qr::backdrop{background:#2B221Cb3}
 @media(max-width:360px){.collection-grid{gap:6px}.collection-item .av{width:58px;height:58px}.collection-preview .av{width:72px;height:72px}}
 @media(prefers-reduced-motion:no-preference){.collection-item,.collection-tabs button{transition:transform .18s ease,background .18s ease}.collection-item:active{transform:scale(.97)}}
 
+
+/* Three playable cosmetic deck finishes. Original 40-card sprite remains intact. */
+body[data-deck="beccaccino-royale"] .card{
+  border:2px solid #a87932;
+  border-radius:9px;
+  box-shadow:inset 0 0 0 2px #f4dca2,inset 0 0 0 5px #763044,0 4px 10px #260d2399;
+}
+body[data-deck="notte-reale"] .card{
+  border:2px solid #b9934c;
+  border-radius:9px;
+  box-shadow:inset 0 0 0 2px #ead5a6,inset 0 0 0 5px #1d304b,0 4px 12px #081426a6;
+}
+.collection-deck.deck-equipped{border-color:#b9934c;box-shadow:inset 0 0 0 1px #b9934c}
+.collection-deck .btn{margin-top:10px}
+.deck-mark-1{background:#653044!important;color:#f4d49a;border-color:#d9a93a!important}
+.deck-mark-2{background:#172b46!important;color:#f4d49a;border-color:#d9a93a!important}
 </style>
 </head>
 <body>
@@ -673,6 +689,8 @@ function actorOf(x){ if(!x||!x.hand) return -1; if(x.status==="trump") return x.
 async function boot(){
   token = load("becca-token");
   if(!token){ token=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now())+"-"+Math.random().toString(36).slice(2); store("becca-token",token); }
+  equippedDeck=DECK_IDS.includes(load("becca-deck"))?load("becca-deck"):classicDeckId;
+  document.body.dataset.deck=equippedDeck;
   myNick = load("becca-nick");
   const la=parseInt(load("becca-avatar"),10); myAvatar = validAv(la) ? la : null;
   myCode = load("becca-codice");
@@ -905,7 +923,14 @@ const COLLECTION_DESCRIPTIONS=[
 ];
 let collectionTab="personaggi", collectionSuit="Tutti", collectionSelected=null;
 const classicDeckId="romagnolo-classico";
-function selectedDeck(){ return classicDeckId; } // Future skins require verified 40-card assets.
+const DECK_IDS=[classicDeckId,"beccaccino-royale","notte-reale"];
+let equippedDeck=classicDeckId;
+function selectedDeck(){ return DECK_IDS.includes(equippedDeck)?equippedDeck:classicDeckId; }
+function equipDeck(id){
+  if(!DECK_IDS.includes(id)) return;
+  equippedDeck=id; store("becca-deck",id); document.body.dataset.deck=id;
+  toast("Mazzo equipaggiato"); render();
+}
 function collectionView(){
   const selected=validAv(collectionSelected)?collectionSelected:(validAv(myAvatar)?myAvatar:0);
   const filterButtons=["Tutti",...COLLECTION_SUITS].map(x=>`<button class="btn sm ${collectionSuit===x?"primary":""}" data-collection-suit="${x}" aria-pressed="${collectionSuit===x}">${x}</button>`).join("");
@@ -914,10 +939,12 @@ function collectionView(){
     <div class="collection-preview">${avImg(selected)}<div class="grow"><span class="eyebrow">Personaggio selezionato</span><h3>${AV_NAMES[selected]}</h3><p>${COLLECTION_DESCRIPTIONS[selected]}</p></div></div>
     <button class="btn primary big" data-collection-equip ${myAvatar===selected?"disabled":""}>${myAvatar===selected?"Già equipaggiato":"Equipaggia personaggio"}</button>
     <p class="small muted">Il personaggio appare al tavolo e nel tuo profilo. Non modifica le regole.</p>`;
-  const decks=`<div class="collection-deck"><span class="deck-mark" aria-hidden="true">♠</span><div class="grow"><b>Romagnolo Classico</b><p>Le 40 carte tradizionali, originali e sempre disponibili.</p><span class="pill open">Equipaggiato</span></div></div>
-    <div class="collection-deck locked"><span class="deck-mark" style="background:#653044;color:#f4d49a;border-color:#d9a93a" aria-hidden="true">♛</span><div class="grow"><b>Beccaccino Royale</b><p>Borgogna e oro · in preparazione</p><span class="pill">Non disponibile</span></div></div>
-    <div class="collection-deck locked"><span class="deck-mark" style="background:#172b46;color:#f4d49a;border-color:#d9a93a" aria-hidden="true">✦</span><div class="grow"><b>Notte Reale</b><p>Blu notte e oro · in preparazione</p><span class="pill">Non disponibile</span></div></div>
-    <p class="small muted">Le nuove skin saranno equipaggiabili solo quando tutte le 40 carte saranno verificate. Per ora il mazzo resta quello originale.</p>`;
+  const decks=DECK_IDS.map((id,i)=>{
+    const name=["Romagnolo Classico","Beccaccino Royale","Notte Reale"][i];
+    const desc=["Le 40 carte romagnole originali.","Borgogna e oro: cornici e dettagli preziosi.","Blu notte e oro: un tavolo più elegante."][i];
+    const symbol=["♠","♛","✦"][i],active=selectedDeck()===id;
+    return `<div class="collection-deck ${active?"deck-equipped":""}"><span class="deck-mark deck-mark-${i}" aria-hidden="true">${symbol}</span><div class="grow"><b>${name}</b><p>${desc}</p><button class="btn sm ${active?"green":"primary"}" data-equip-deck="${id}" ${active?"disabled":""}>${active?"Equipaggiato":"Equipaggia"}</button></div></div>`;
+  }).join("")+`<p class="small muted">Royale e Notte Reale sono varianti decorative del mazzo romagnolo originale: semi, valori e illustrazioni restano invariati. Le versioni con illustrazioni completamente nuove arriveranno soltanto dopo la verifica delle 40 carte.</p>`;
   return `<div class="topbar"><button class="ic" data-home aria-label="Torna al menu">${I_BACK}</button><h2>Collezione</h2></div>
     <section class="collection-hero"><span class="eyebrow">Il tuo Beccaccino</span><h2>La tua corte.<br>Le tue carte.</h2><p>Dodici personaggi della tradizione romagnola. Scegli chi ti rappresenta.</p></section>
     <div class="collection-tabs" role="tablist" aria-label="Sezioni collezione"><button role="tab" aria-selected="${collectionTab==="personaggi"}" data-collection-tab="personaggi">Personaggi</button><button role="tab" aria-selected="${collectionTab==="mazzi"}" data-collection-tab="mazzi">Mazzi</button></div>
@@ -1417,6 +1444,7 @@ function wireApp(){
   on("[data-collection-tab]",el=>{ collectionTab=el.dataset.collectionTab; render(); });
   on("[data-collection-suit]",el=>{ collectionSuit=el.dataset.collectionSuit; render(); });
   on("[data-collection-avatar]",el=>{ collectionSelected=+el.dataset.collectionAvatar; render(); });
+  on("[data-equip-deck]",el=>equipDeck(el.dataset.equipDeck));
   on("[data-collection-equip]",()=>{ if(!validAv(collectionSelected)) return; myAvatar=collectionSelected; pickAv=myAvatar; store("becca-avatar",String(myAvatar)); syncProfile(); toast("Personaggio equipaggiato"); render(); });
   on("[data-stats]",()=>{ view="stats"; render(); window.scrollTo(0,0); loadStats(); });
   on("[data-home]",()=>{ view="home"; render(); });
