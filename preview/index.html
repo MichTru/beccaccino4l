@@ -29,7 +29,7 @@
   --denari:#A8781A; --coppe:#A8352A; --spade:#2A4F86; --bastoni:#3A6B33;
   --f-display:"Bodoni Moda","Didot","Bodoni 72",Georgia,serif;
   --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --sprite:url(../carte.webp);
+  --sprite:url(../mazzo_cartoon.webp);
   color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -449,6 +449,10 @@ body.in-game .handzone{background:linear-gradient(0deg,#1a2948c9,transparent 85%
 @media(prefers-reduced-motion:reduce){body.in-game .character-seat.turn .avwrap .av,body.in-game .character-seat.turn .avwrap:before{animation:none!important}}
 
 </style>
+<script>
+/* Preview: if the new sprite has not been uploaded yet, retain the original deck. */
+(()=>{const img=new Image();img.onerror=()=>{document.documentElement.style.setProperty("--sprite","url(../carte.webp)");window.__classicFallback=true;};img.onload=()=>{window.__cartoonReady=true;};img.src="../mazzo_cartoon.webp?v=1";})();
+</script>
 </head>
 <body>
 <div id="app"><div class="splash" aria-label="Caricamento"><div class="fan4" aria-hidden="true"><span class="card" style="background-position:0% 33.33%;transform:translateX(-50%) rotate(-21deg) translateY(9px)"></span><span class="card" style="background-position:0% 100%;transform:translateX(-50%) rotate(-7deg) translateY(3px)"></span><span class="card" style="background-position:0% 0%;transform:translateX(-50%) rotate(7deg) translateY(3px)"></span><span class="card" style="background-position:11.11% 33.33%;transform:translateX(-50%) rotate(21deg) translateY(9px)"></span></div><h1>Beccaccino</h1><span class="tag">Romagnolo · si va a 41</span><span class="loader" aria-hidden="true"><i></i><i></i><i></i></span><span class="small muted">Mescolo il mazzo…</span></div></div>
@@ -503,8 +507,8 @@ const I_OFF='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="cur
 const I_QR='<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M3 3h8v8H3zm2 2v4h4V5zM13 3h8v8h-8zm2 2v4h4V5zM3 13h8v8H3zm2 2v4h4v-4zM13 13h3v3h-3zm5 0h3v3h-3zm-5 5h3v3h-3zm5 0h3v3h-3zm-2.5-2.5h2v2h-2z"/><path d="M6 6h2v2H6zm10 0h2v2h-2zM6 16h2v2H6z"/></svg>';
 const I_CHAT='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.2-4.4A8 8 0 1 1 21 12z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/></svg>';
 const I_SHARE='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
-const SPRITE_ROW = {B:0,C:1,D:2,S:3};
-const spritePos = c => `background-position:${(cr(c)-1)*100/9}% ${SPRITE_ROW[cs(c)]*100/3}%`;
+const SPRITE_ROW = {B:3,C:1,D:0,S:2};
+const spritePos = c => `background-position:${(cr(c)-1)*100/9}% ${(window.__classicFallback?({B:0,C:1,D:2,S:3}[cs(c)]):SPRITE_ROW[cs(c)])*100/3}%`;
 
 // ---------- suoni ----------
 const Snd = {
