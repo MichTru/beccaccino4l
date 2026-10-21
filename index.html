@@ -360,6 +360,19 @@ body[data-deck="notte-reale"] .card{
 .collection-deck .btn{margin-top:10px}
 .deck-mark-1{background:#653044!important;color:#f4d49a;border-color:#d9a93a!important}
 .deck-mark-2{background:#172b46!important;color:#f4d49a;border-color:#d9a93a!important}
+
+/* Character-forward mobile table: readable, lightweight and motion-safe */
+.character-seat .avwrap{position:relative;isolation:isolate}
+.character-seat .avwrap .av{position:relative;z-index:1;box-shadow:0 4px 14px #0005,0 0 0 2px #f3d9a5;transition:transform .25s ease,box-shadow .25s ease}
+.character-seat .nm{font-weight:900;letter-spacing:.015em;text-shadow:0 1px 2px #0005}
+.character-seat.turn .avwrap .av{box-shadow:0 0 0 3px #ffdb7c,0 0 18px 5px #ffc64b88,0 4px 14px #0006;transform:translateY(-3px) scale(1.07)}
+.character-turn-label{display:block;position:absolute;top:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;background:linear-gradient(115deg,#f6dc96,#b88a37);color:#2d1d14;padding:3px 7px;border-radius:99px;font-size:9px;font-weight:950;letter-spacing:.04em;box-shadow:0 2px 8px #0005;z-index:4;pointer-events:none}
+.character-seat{position:relative}
+.character-seat.turn .avwrap:before{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid #eac56a;opacity:.8;pointer-events:none}
+@media(prefers-reduced-motion:no-preference){.character-seat.turn .avwrap:before{animation:characterHalo 2s ease-in-out infinite}.character-seat.turn .avwrap .av{animation:characterFloat 2s ease-in-out infinite alternate}}
+@keyframes characterHalo{0%,100%{transform:scale(.94);opacity:.35}50%{transform:scale(1.12);opacity:.95}}
+@keyframes characterFloat{from{transform:translateY(-2px) scale(1.03)}to{transform:translateY(-5px) scale(1.08)}}
+@media(prefers-reduced-motion:reduce){.character-seat .avwrap .av{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -457,7 +470,7 @@ const E=(()=>{
 const SUITS = ["D", "C", "S", "B"];
 const SUIT_NAME = { D: "Denari", C: "Coppe", S: "Spade", B: "Bastoni" };
 const TARGET = 41;
-const BOT_NAMES = ["CPU Lugo", "CPU Bagnacavallo", "CPU Cotignola", "CPU Fusignano"];
+const BOT_NAMES = ["CPU", "CPU", "CPU", "CPU"];
 const STR = { 3: 10, 2: 9, 1: 8, 10: 7, 9: 6, 8: 5, 7: 4, 6: 3, 5: 2, 4: 1 };
 const cs = (c) => c[0];
 const cr = (c) => +c.slice(1);
@@ -675,6 +688,7 @@ const AV_NAMES=["Re di Spade","Cavallo di Spade","Fante di Spade","Re di Coppe",
 const avPos = i => `background-position:${i*100/11}% 0`;
 const validAv = a => Number.isInteger(a) && a>=0 && a<=11;
 function avImg(i,cls="",extra=""){ return `<span class="av pic ${cls}" style="${avPos(i)}" aria-hidden="true">${extra}</span>`; }
+function displayNick(x,s){ const seat=x&&x.seats&&x.seats[s]; return seat&&seat.bot?"CPU":nick(x,s); }
 function avatar(x,s,cls=""){
   const seat=x&&x.seats[s];
   const tag = seat&&seat.bot ? '<i class="cpu">CPU</i>' : seat&&seat.away ? '<i class="cpu auto">AUTO</i>' : '';
@@ -1264,7 +1278,7 @@ function homeView(){
     const st=t.stato||{}, seats=st.seats||[], n=seats.filter(Boolean).length;
     const pill = st.status==="lobby" ? `<span class="pill open">${n<4?"Entra":"Pieno"} · ${n}/4</span>` : st.status==="end" ? `<span class="pill">Finita</span>` : `<span class="pill live">${st.scores?st.scores[0]+" – "+st.scores[1]:"In gioco"}</span>`;
     const avs = seats.map((x,i)=>x?avatar(st,i,"sm"):"").join("");
-    return `<button class="titem" data-open="${esc(t.id)}"><span class="avs">${avs}</span><span class="grow"><b>${esc(t.nome)}</b><br><span class="meta">${seats.filter(Boolean).map(x=>esc(x.nick)).join(", ")||"nessuno seduto"}</span></span>${pill}</button>`;
+    return `<button class="titem" data-open="${esc(t.id)}"><span class="avs">${avs}</span><span class="grow"><b>${esc(t.nome)}</b><br><span class="meta">${seats.filter(Boolean).map(x=>esc(x.bot?"CPU":x.nick)).join(", ")||"nessuno seduto"}</span></span>${pill}</button>`;
   }).join("") : `<p class="note">Nessun tavolo aperto. Creane uno e chiama gli amici.</p>`;
   const resume = miei.length ? `<div class="panel resume"><span class="eyebrow">Partite in corso</span>${miei.map(t=>{
       const st=t.stato||{}, sc=st.scores||[0,0];
@@ -1360,11 +1374,11 @@ function gameView(){
     const turn=a===s, cr_=h&&h.trump&&h.cricca.includes(s);
     const seatX=g.seats[s], tl=turn&&seatX&&!seatX.bot&&!seatX.away?turnLeft():null;
     const timer = tl!=null && tl<=20000 ? `<span class="timer ${tl<=10000?"hot":""}" aria-label="secondi rimasti">${Math.ceil(tl/1000)}</span>` : "";
-    if(r===0) return `<div class="pl p-me ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s)}${timer}</span><span class="nm">${me_>=0?"Tu":esc(nick(g,s))}</span>${cr_?'<span class="cr">Cricca</span>':""}</div>`;
+    if(r===0) return `<div class="pl p-me character-seat ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s)}${timer}</span><span class="nm">${me_>=0?"Tu":esc(displayNick(g,s))}</span>${cr_?'<span class="cr">Cricca</span>':""}</div>`;
     const n=Math.min(left,10), mid=(n-1)/2;
     const backs=Array.from({length:n},(_,i)=>`<i style="transform:translateX(${(i-mid)*5}px) rotate(${(i-mid)*7}deg)"></i>`).join("");
     const sub = turn ? `<span class="thinking" aria-label="sta giocando"><i></i><i></i><i></i></span>` : `<span class="sub">${r===2&&me_>=0?"compagno · ":""}${h?h.tricks[teamOf(s)]:0} prese</span>`;
-    return `<div class="pl ${posCls[r]} ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s,"lg")}${timer}</span><span class="nm">${esc(nick(g,s))}</span><span class="backs" aria-label="${left} carte">${backs}</span>${sub}${cr_?'<span class="cr">Cricca</span>':""}</div>`;
+    return `<div class="pl character-seat ${posCls[r]} ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s,"lg")}${timer}</span><span class="nm">${esc(displayNick(g,s))}</span>${turn?`<span class="character-turn-label">TOCCA A ${seatX&&seatX.bot?"CPU":"TE"}</span>`:""}<span class="backs" aria-label="${left} carte">${backs}</span>${sub}${cr_?'<span class="cr">Cricca</span>':""}</div>`;
   }).join("");
   // presa al centro
   let trick="";
