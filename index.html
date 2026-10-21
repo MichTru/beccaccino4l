@@ -1378,7 +1378,7 @@ function gameView(){
     const n=Math.min(left,10), mid=(n-1)/2;
     const backs=Array.from({length:n},(_,i)=>`<i style="transform:translateX(${(i-mid)*5}px) rotate(${(i-mid)*7}deg)"></i>`).join("");
     const sub = turn ? `<span class="thinking" aria-label="sta giocando"><i></i><i></i><i></i></span>` : `<span class="sub">${r===2&&me_>=0?"compagno · ":""}${h?h.tricks[teamOf(s)]:0} prese</span>`;
-    return `<div class="pl character-seat ${posCls[r]} ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s,"lg")}${timer}</span><span class="nm">${esc(displayNick(g,s))}</span>${turn?`<span class="character-turn-label">TOCCA A ${seatX&&seatX.bot?"CPU":"TE"}</span>`:""}<span class="backs" aria-label="${left} carte">${backs}</span>${sub}${cr_?'<span class="cr">Cricca</span>':""}</div>`;
+    return `<div class="pl character-seat ${posCls[r]} ${us?"us":"them"} ${turn?"turn":""}" data-seat="${s}"><span class="avwrap">${avatar(g,s,"lg")}${timer}</span><span class="nm">${esc(displayNick(g,s))}</span>${turn?`<span class="character-turn-label">TOCCA A ${seatX&&seatX.bot?"CPU":"GIOCATORE"}</span>`:""}<span class="backs" aria-label="${left} carte">${backs}</span>${sub}${cr_?'<span class="cr">Cricca</span>':""}</div>`;
   }).join("");
   // presa al centro
   let trick="";
