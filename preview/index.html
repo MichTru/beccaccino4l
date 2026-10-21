@@ -448,6 +448,30 @@ body.in-game .handzone{background:linear-gradient(0deg,#1a2948c9,transparent 85%
 @media(max-width:390px){body.in-game .board{margin-inline:5px}body.in-game .hud{gap:5px;padding-inline:6px}body.in-game .board-score{padding:6px 7px}body.in-game .hic{width:35px;height:35px}}
 @media(prefers-reduced-motion:reduce){body.in-game .character-seat.turn .avwrap .av,body.in-game .character-seat.turn .avwrap:before{animation:none!important}}
 
+
+/* BECCACCINO UNIVERSE — PHASE 1 / mobile table polish (preview only) */
+:root{--game-gold:#f4c967;--game-deep:#101d35;--game-cream:#fff4d9}
+body.in-game{background:radial-gradient(ellipse at 50% 10%,#284564 0%,#152840 45%,#0d192c 100%);color:var(--game-cream)}
+body.in-game .hud{position:relative;z-index:5;padding:10px 12px 8px;gap:8px}
+body.in-game .board-score{border-radius:18px;background:linear-gradient(180deg,#24364de8,#121e32ee);border:1px solid #f4c96755;box-shadow:0 5px 18px #0005,inset 0 1px 0 #ffffff20;padding:7px 10px}
+body.in-game .team .tp{color:#fff3cc;text-shadow:0 2px 8px #0009;font-variant-numeric:tabular-nums}
+body.in-game .hic{background:linear-gradient(160deg,#334963,#16253b);border:1px solid #e6c77a55;border-radius:13px;box-shadow:0 3px 0 #0b1321,0 6px 12px #0004}
+body.in-game .board{isolation:isolate}
+body.in-game .cloth{box-shadow:inset 0 0 0 3px #e9c87765,inset 0 0 40px #061b2699,0 12px 30px #0008}
+body.in-game .pl .nm{border:1px solid #ffffff35;box-shadow:0 3px 9px #0006;letter-spacing:.01em}
+body.in-game .pl.turn .nm{background:#eebc55;color:#1a2635;border-color:#fff0b2;box-shadow:0 0 18px #ffc95c77}
+body.in-game .pl.turn .av{animation:beccaccinoTurn 1.8s ease-in-out infinite}
+@keyframes beccaccinoTurn{0%,100%{filter:drop-shadow(0 0 4px #f4c96788)}50%{filter:drop-shadow(0 0 13px #ffd776)}}
+body.in-game .slot .card{filter:drop-shadow(0 5px 5px #0005);transition:filter .2s ease}
+body.in-game .slot.win .card{filter:drop-shadow(0 0 10px #ffd66f)}
+body.in-game .fan .card{touch-action:manipulation;transition:transform .22s cubic-bezier(.2,.8,.2,1),filter .2s ease,bottom .22s cubic-bezier(.2,.8,.2,1);box-shadow:0 4px 0 #bda77c,0 9px 16px #0007}
+body.in-game .fan .card.ok{bottom:22px;filter:brightness(1.08);box-shadow:0 0 0 3px #ffd36b,0 5px 0 #9f7c34,0 12px 22px #0009}
+body.in-game .fan .card:focus-visible{outline:3px solid #ffe19b;outline-offset:3px}
+body.in-game .status.me{background:linear-gradient(160deg,#f5c960,#d48a35);color:#1c2637;border:2px solid #ffedb6;box-shadow:0 4px 0 #8b5429,0 9px 20px #0007}
+body.in-game .sig{background:#f4c967;color:#17263b;border:1px solid #fff2bf}
+@media(max-width:390px){body.in-game .hud{padding-inline:6px;gap:5px}body.in-game .board-score{padding:5px 6px;gap:4px}body.in-game .pl .nm{font-size:.69rem}}
+@media(prefers-reduced-motion:reduce){body.in-game .pl.turn .av{animation:none!important}body.in-game .fan .card{transition:none!important}}
+
 </style>
 <script>
 /* Preview: if the new sprite has not been uploaded yet, retain the original deck. */
