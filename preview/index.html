@@ -402,6 +402,52 @@ body.in-game .card{border-radius:6px;box-shadow:0 3px 0 #f3e9d2,0 7px 18px #0007
 body.in-game .fan .card.ok{box-shadow:0 0 0 3px #f4d28b,0 9px 24px #0008}
 body.in-game .fan .card.no{filter:brightness(.76) saturate(.8)}
 @media(prefers-reduced-motion:reduce){body.in-game .hud{backdrop-filter:none}}
+
+/* === BECCACCINO TOON — playable visual redesign v1 ===
+   All existing gameplay DOM, card identities and rules are preserved. */
+:root{--toon-ink:#30232d;--toon-blue:#2289ed;--toon-yellow:#ffd34f;--toon-cream:#fff5dc}
+body:not(.in-game){background:radial-gradient(circle at 10% 0%,#f5e6aa 0%,transparent 45%),radial-gradient(circle at 95% 45%,#a8f0e5 0%,transparent 45%),#e4f3e7;color:#30232d}
+body:not(.in-game) #app{padding-inline:12px}
+body:not(.in-game) .panel,body:not(.in-game) .collection-hero{border:3px solid var(--toon-ink);border-radius:24px;box-shadow:0 7px 0 var(--toon-ink),0 15px 25px #32253022}
+body:not(.in-game) .panel{background:#fff9e9}
+body:not(.in-game) .btn{border:2.5px solid var(--toon-ink);border-radius:17px;box-shadow:0 5px 0 var(--toon-ink),0 8px 14px #33263320;font-weight:950}
+body:not(.in-game) .btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--toon-ink)}
+body:not(.in-game) .btn.primary{background:linear-gradient(#ffdc64,#ffa932);color:#332332}
+body:not(.in-game) .btn.green{background:linear-gradient(#4be5c5,#19b1a7);color:#183c44}
+body:not(.in-game) .logo h1{color:#fff8e4;-webkit-text-stroke:2px #342532;text-shadow:3px 4px 0 #ffac35,6px 7px 0 #342532;letter-spacing:.01em}
+body:not(.in-game) .avpick,body:not(.in-game) .collection-item{border:2px solid #322432;box-shadow:0 4px 0 #322432;border-radius:18px}
+body:not(.in-game) .collection-item[aria-pressed=true]{background:#6c4eaa}
+body:not(.in-game) .collection-tabs button{border:2px solid #332332;box-shadow:0 4px 0 #332332;border-radius:15px}
+body:not(.in-game) .collection-tabs button[aria-selected=true]{background:#ffd34f;color:#342432}
+body:not(.in-game) .collection-preview,body:not(.in-game) .collection-deck{border:2px solid #3c2c38;border-radius:20px;background:#fff6df}
+body:not(.in-game) .collection-hero{background:linear-gradient(130deg,#7050bd,#d36fba 70%,#ffc34d)}
+body:not(.in-game) .collection-hero h2{font-weight:950;text-shadow:2px 3px 0 #432d65}
+body:not(.in-game) .ic{border:2px solid #342432;box-shadow:0 4px 0 #342432;background:#ffdc64}
+body.in-game #game{background:radial-gradient(circle at 48% 40%,#6d9c9e 0%,#23536a 65%,#142c4c 100%)!important}
+body.in-game #game:before{background:radial-gradient(ellipse at 50% -20%,#ffe89b65,transparent 48%),repeating-linear-gradient(130deg,#ffffff07 0 8px,#0000 8px 24px)}
+body.in-game .hud{background:linear-gradient(#22304b,#151f38)!important;border-bottom:4px solid #0d1728;border-radius:0 0 20px 20px;padding:9px 9px 12px;box-shadow:0 6px 0 #09152655}
+body.in-game .hic{background:linear-gradient(#ffdf70,#f4a939);color:#352331;border:3px solid #30232d;border-radius:14px;box-shadow:0 4px 0 #151222}
+body.in-game .board-score{background:#1a2541;border:3px solid #10192c;border-radius:18px;box-shadow:inset 0 2px 0 #ffffff20,0 4px 0 #10192c}
+body.in-game .team .tp{font-weight:1000;font-size:1.85rem;text-shadow:2px 2px 0 #141d31}
+body.in-game .team.us .tp{color:#ffdf65}
+body.in-game .team.them .tp{color:#71e5d4}
+body.in-game .board{margin:12px 9px 0}
+body.in-game .cloth{background:radial-gradient(ellipse at 50% 32%,#40b6a0 0%,#239786 60%,#116b72 100%)!important;border:7px solid #9b583b!important;border-radius:clamp(24px,8vw,45px)!important;box-shadow:inset 0 0 0 4px #ffd67e,inset 0 0 0 9px #55322e,inset 0 12px 28px #ffffff28,inset 0 -24px 45px #082b3a70,0 9px 0 #382a36,0 17px 24px #0007!important}
+body.in-game .cloth:after{content:"♛  BECCACCINO  ♛";font-size:clamp(12px,3vw,18px);font-weight:1000;color:#ffefac33;text-shadow:0 2px 0 #0d686244;letter-spacing:.13em}
+body.in-game .pl .nm{background:#222239!important;border:3px solid #171422;color:#fff9e4;border-radius:15px;padding:4px 9px;font-weight:1000;box-shadow:0 4px 0 #0e1220,0 6px 8px #0004}
+body.in-game .pl .sub{color:#e9f6e9;font-weight:900;text-shadow:0 2px 2px #09292a}
+body.in-game .character-seat .avwrap .av{border:3px solid #352332;border-radius:17px;box-shadow:0 4px 0 #151321,0 7px 14px #0006,0 0 0 2px #ffda73;background-color:#f9ce8e}
+body.in-game .character-seat.turn .avwrap .av{box-shadow:0 4px 0 #171321,0 0 0 4px #fff1a2,0 0 22px 7px #ffdd5ca8}
+body.in-game .character-turn-label{border:2px solid #362332;background:#ffd34f;color:#362332;box-shadow:0 3px 0 #362332;font-size:9px;font-weight:1000}
+body.in-game .pl .cr{background:#ffd34f;color:#342332;border:2px solid #342332;box-shadow:0 2px 0 #342332;font-weight:1000}
+body.in-game .card{border:2px solid #392934;border-radius:9px;box-shadow:0 3px 0 #392934,0 8px 12px #0006;background-color:#fffdf4}
+body.in-game .fan .card.ok{box-shadow:0 0 0 3px #ffda52,0 4px 0 #382331,0 8px 20px #0007}
+body.in-game .chip{background:#26324e;border:2px solid #0f1729;border-radius:12px;box-shadow:0 3px 0 #0f1729;color:#fff5db}
+body.in-game .chip[aria-pressed=true]{background:#ffd34f;color:#332332;border-color:#332332;box-shadow:0 3px 0 #332332}
+body.in-game .handzone{background:linear-gradient(0deg,#1a2948c9,transparent 85%);border-radius:24px 24px 0 0}
+@media(max-width:390px){body.in-game .board{margin-inline:5px}body.in-game .hud{gap:5px;padding-inline:6px}body.in-game .board-score{padding:6px 7px}body.in-game .hic{width:35px;height:35px}}
+@media(prefers-reduced-motion:reduce){body.in-game .character-seat.turn .avwrap .av,body.in-game .character-seat.turn .avwrap:before{animation:none!important}}
+
 </style>
 </head>
 <body>
